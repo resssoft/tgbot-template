@@ -27,8 +27,10 @@ type UserPromise struct {
 	promiseType  string
 	KeyboardOpen bool
 }
+
 type Command struct {
 	Name   string
+	Parsed []string
 	Params string
 	Data   tgbotapi.Update
 }

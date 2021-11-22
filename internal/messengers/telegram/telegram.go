@@ -2,7 +2,6 @@ package telegram
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	config "github.com/resssoft/tgbot-template/configuration"
@@ -10,19 +9,19 @@ import (
 	"github.com/resssoft/tgbot-template/internal/models"
 	"github.com/rs/zerolog/log"
 	"net/http"
-	"net/url"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 )
 
 const (
+	workers            = 4
 	timeout        int = 60
 	updateOffset       = 0
 	parseMode          = "MarkdownV2"
 	maxConnections     = 10
 	updatesBuffer      = 1000
+	commandsBuffer     = 300
 )
 
 type TgApp interface {
@@ -54,6 +53,7 @@ func Initialize(dispatcher *mediator.Dispatcher) (TgApp, error) {
 		users:        make(map[int64]models.TelegramUser),
 		BotName:      botTelegram.Self.UserName,
 		updates:      make(chan tgbotapi.Update, updatesBuffer),
+		commands:     make(chan Command, commandsBuffer),
 	}
 	config.SetTelegramAdminBot(tgApp.BotName)
 	if err := dispatcher.Register(
@@ -61,6 +61,9 @@ func Initialize(dispatcher *mediator.Dispatcher) (TgApp, error) {
 			tgApp: tgApp,
 		}, models.TelegramEvents...); err != nil {
 		log.Info().Err(err).Send()
+	}
+	for i := 0; i < workers; i++ {
+		go tgApp.commandsHandler()
 	}
 	return tgApp, nil
 }
@@ -73,27 +76,24 @@ func (t *tgConfig) GetUpdatesChannel() tgbotapi.UpdatesChannel {
 	return t.updates
 }
 
-func (t *tgConfig) IsCommand(msg, command string) bool {
-	return msg == command || msg == fmt.Sprintf("%s@%s", command, t.BotName)
+func (t *tgConfig) CheckCommand(msg string, chatId int64, commands ...string) bool {
+	result := false
+	for _, command := range commands {
+		if msg == command || msg == fmt.Sprintf("%s@%s", command, t.BotName) {
+			result = true
+			break
+		}
+	}
+	if chatId != 0 {
+		if !(chatId == config.TelegramAdminId() || chatId == config.TelegramReportChatId()) {
+			result = false
+		}
+	}
+	return result
 }
 
 func (t *tgConfig) Send(message tgbotapi.Chattable) (tgbotapi.Message, error) {
-	/*
-		switch msg := message.(type) {
-		case tgbotapi.MessageConfig:
-			//TODO: add thread safe writes by mutex.Lock()
-			//tgUser, userExist := t.users[msg.ChatID]
-
-			if config.AmoCrmEventFromBotMessage() {
-				log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmMessageSend, models.AmoCrmMessageSendEvent{
-					Message:      msg.Text,
-					IsBot:        true,
-					TelegramUser: models.TelegramUser{ID: msg.ChatID},
-				})).Send()
-			}
-
-		}
-	*/
+	//TODO: override sending
 	return t.BotTelegram.Send(message)
 }
 
@@ -287,23 +287,25 @@ func (t *tgConfig) MessageHandler() {
 
 	updates := t.GetUpdatesChannel()
 	if config.TelegramCallBackUrl() != "" {
-		log.Debug().Msgf("Set telegram webhook to %s", config.TelegramCallBackUrl())
-		urlObject, _ := url.Parse(config.TelegramCallBackUrl())
-		_, err := t.BotTelegram.SetWebhook(tgbotapi.WebhookConfig{
-			URL:            urlObject,
-			MaxConnections: maxConnections,
-		})
-		if err != nil {
-			log.Info().Err(err).Msgf("telegtam webhook install error")
-			return
-		}
-		webhookInfo, err := t.BotTelegram.GetWebhookInfo()
-		if err != nil {
-			log.Info().Err(err).Msg("telegtam webhook install error")
-		}
-		if webhookInfo.LastErrorDate != 0 {
-			log.Printf("Telegram callback failed: %s", webhookInfo.LastErrorMessage)
-		}
+		/*
+			log.Debug().Msgf("Set telegram webhook to %s", config.TelegramCallBackUrl())
+			urlObject, _ := url.Parse(config.TelegramCallBackUrl())
+			_, err := t.BotTelegram.SetWebhook(tgbotapi.WebhookConfig{
+				URL:            urlObject,
+				MaxConnections: maxConnections,
+			})
+			if err != nil {
+				log.Info().Err(err).Msgf("telegtam webhook install error")
+				return
+			}
+			webhookInfo, err := t.BotTelegram.GetWebhookInfo()
+			if err != nil {
+				log.Info().Err(err).Msg("telegtam webhook install error")
+			}
+			if webhookInfo.LastErrorDate != 0 {
+				log.Printf("Telegram callback failed: %s", webhookInfo.LastErrorMessage)
+			}
+		*/
 	} else {
 		_, err := t.BotTelegram.RemoveWebhook()
 		if err != nil {
@@ -358,121 +360,42 @@ func (t *tgConfig) MessageHandler() {
 			msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, update.CallbackQuery.Message.Command())
 			t.Send(msg)
 		} else {
+			log.Info().Msg("Handle updates")
 			if update.Message == nil {
 				continue
 			}
+			message := ""
 			if reflect.TypeOf(update.Message.Text).Kind() == reflect.String && update.Message.Text != "" {
+				message = update.Message.Text
+			} else {
+				message = update.Message.Caption
+			}
+			log.Info().Msgf("Handle updates: %s", message)
 
-				t.dispatcher.Dispatch(models.LogToFile, models.FileLoggerEvent{
-					Src: models.FileLogMessenger,
-					Data: fmt.Sprintf("Tg message from: %v %s %s %s, text %s",
-						update.Message.From.ID,
-						update.Message.From.UserName,
-						update.Message.From.FirstName,
-						update.Message.From.LastName,
-						update.Message.Text,
-					),
-				})
+			t.dispatcher.Dispatch(models.LogToFile, models.FileLoggerEvent{
+				Src: models.FileLogMessenger,
+				Data: fmt.Sprintf("Tg message from: %v %s %s %s, text %s",
+					update.Message.From.ID,
+					update.Message.From.UserName,
+					update.Message.From.FirstName,
+					update.Message.From.LastName,
+					message,
+				),
+			})
 
-				splitedCommands, commandValue := splitCommand(update.Message.Text, " ")
-				log.Debug().Msg(commandValue)
-				commandsCount := len(splitedCommands)
-				commandName := splitedCommands[0]
+			ParsedCommands, commandValue := splitCommand(message, " ")
+			log.Debug().Msg(commandValue)
 
-				if update.Message.Chat.Type != "private" {
-					log.Info().Msgf("Group detected %s %v", update.Message.Chat.Type, update.Message.Chat.ID)
-				}
+			t.commands <- Command{
+				Name:   ParsedCommands[0],
+				Parsed: ParsedCommands,
+				Params: commandValue,
+				Data:   update,
+			}
 
-				if t.IsCommand(commandName, "/ver") {
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, config.Version)
-					t.Send(msg)
-					continue
-				}
+			//userPromises
+			/*
 
-				if t.IsCommand(commandName, "/this") {
-					statistic := fmt.Sprintf("Current chat: %v \nFrom %v",
-						update.Message.Chat.ID,
-						update.Message.From.ID)
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, statistic)
-					t.Send(msg)
-					continue
-				}
-
-				if t.IsCommand(commandName, "/test") {
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "test")
-					msg.ReplyMarkup = menu
-					t.Send(msg)
-					continue
-				}
-
-				t.dispatcher.Dispatch(models.TelegramDuplicateMessage, models.TelegramDuplicateMessageEvent{
-					Chat: strconv.Itoa(update.Message.From.ID),
-					Data: url.Values{
-						"mode":    {"post"},
-						"prov":    {"0"},
-						"lastMod": {"0"},
-						"name": {fmt.Sprintf("%s %s (@%s) %v",
-							update.Message.From.FirstName,
-							update.Message.From.LastName,
-							update.Message.From.UserName,
-							update.Message.Chat.ID,
-						)},
-						"text": {update.Message.Text},
-					},
-				})
-
-				if update.Message.Chat.ID == config.TelegramAdminId() ||
-					update.Message.Chat.ID == config.TelegramReportChatId() {
-					if t.IsCommand(commandName, "/info") {
-						appStat, _ := json.MarshalIndent(config.GetMemUsage(), "", "    ")
-						t.Send(tgbotapi.NewMessage(update.Message.Chat.ID, string(appStat)))
-						continue
-					}
-
-					if t.IsCommand(commandName, "/refreshToken") {
-						//log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmRefreshToken, models.AmoCrmRefreshTokenEvent{})).Send()
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "event sent")
-						t.Send(msg)
-						continue
-					}
-
-					if t.IsCommand(commandName, "/setPipeline") {
-						newPipeline, err := strconv.Atoi(commandValue)
-						oldPipeline := config.AmoCrmPipeline()
-						messageText := "Pipeline not changed"
-						if err == nil {
-							messageText = fmt.Sprintf("Pipeline change from %v to %v", oldPipeline, newPipeline)
-							config.SetAmoCrmPipeline(newPipeline)
-						}
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, messageText)
-						t.Send(msg)
-						continue
-					}
-					if t.IsCommand(commandName, "/setLeadStatus") {
-						newLeadStatus, err := strconv.Atoi(commandValue)
-						oldLeadStatus := config.AmoCrmLeadStatus()
-						messageText := "Lead Status not changed"
-						if err == nil {
-							messageText = fmt.Sprintf("Lead Status change from %v to %v", oldLeadStatus, newLeadStatus)
-							config.SetAmoCrmLeadStatus(newLeadStatus)
-						}
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, messageText)
-						t.Send(msg)
-						continue
-					}
-
-					if t.IsCommand(commandName, "/logPromises") {
-						log.Info().Msgf("userPromises: count %v list: \n %#v", len(t.userPromises), t.userPromises)
-						continue
-					}
-
-					if t.IsCommand(commandName, "/export") {
-						// TODO:release
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "event sent")
-						t.Send(msg)
-						continue
-					}
-				}
 				tgUser := models.TelegramUser{
 					ID:           update.Message.Chat.ID,
 					FirstName:    update.Message.From.FirstName,
@@ -481,241 +404,14 @@ func (t *tgConfig) MessageHandler() {
 					LanguageCode: update.Message.From.LanguageCode,
 					IsBot:        update.Message.From.IsBot,
 				}
-				log.Debug().Interface("update.Message.From", update.Message.From).Send()
-				log.Debug().Interface("update.Message.Chat", update.Message.Chat).Send()
-				messageText := update.Message.Text
-				if update.Message.ReplyToMessage != nil {
-					replyFrom := update.Message.ReplyToMessage.From.FirstName +
-						" " + update.Message.ReplyToMessage.From.LastName
-					if update.Message.ReplyToMessage.From.UserName != "" {
-						replyFrom += " @" + update.Message.ReplyToMessage.From.UserName
-					}
-					messageText += fmt.Sprintf(
-						"\n\nReply from [%s] to message:\n%s",
-						replyFrom,
-						update.Message.ReplyToMessage.Text)
-				}
-				if commandsCount == 0 {
+				//TODO: add thread safe writes by mutex.Lock()
+				t.users[update.Message.Chat.ID] = tgUser
+				if _, ok := t.userPromises[update.Message.Chat.ID]; ok {
+					log.Info().Msg("handle Promises")
+					delete(t.userPromises, update.Message.Chat.ID)
 					continue
 				}
-				/*
-					srcTag := ""
-					if commandName == "/start" {
-						srcTag = commandValue
-					}
-				*/
-				/*
-					log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmMessageSend, models.AmoCrmMessageSendEvent{
-						Message:      messageText,
-						IsBot:        false,
-						TelegramUser: tgUser,
-						Source:       srcTag,
-					})).Send()
-				*/
-
-				//log.Printf("[%s, %n] %s", update.Message.Chat.UserName, update.Message.Chat.ID, update.Message.Text)
-				//log.Printf("%#v", t.userPromises)
-
-				if config.AmoCrmEventFromBotMessage() {
-					//TODO: add thread safe writes by mutex.Lock()
-					t.users[update.Message.Chat.ID] = tgUser
-					if _, ok := t.userPromises[update.Message.Chat.ID]; ok {
-						log.Info().Msg("handle Promises")
-						/*
-							log.Info().Err(t.dispatcher.Dispatch(models.PipelineLeadAnswer, models.PipelineLeadAnswerEvent{
-								Message:   update.Message.Text,
-								Messenger: "telegram",
-								User: models.TelegramUser{
-									ID:           update.Message.Chat.ID,
-									FirstName:    update.Message.From.FirstName,
-									LastName:     update.Message.From.LastName,
-									UserName:     update.Message.From.UserName,
-									LanguageCode: update.Message.From.LanguageCode,
-									IsBot:        update.Message.From.IsBot,
-								},
-							})).Send()
-						*/
-						delete(t.userPromises, update.Message.Chat.ID)
-						continue
-					}
-				}
-
-				switch commandName {
-				case "/start":
-					/*
-						if config.AmoCrmEventFromBotMessage() {
-							if commandValue != "" {
-								log.Info().Err(t.dispatcher.Dispatch(models.PipelineLeadAdd, models.PipelineLeadAddEvent{
-									Source:    commandValue,
-									Messenger: "telegram",
-									User:      tgUser,
-								})).Send()
-							}
-						}
-					*/
-
-				default:
-					//msg := tgbotapi.NewMessage(update.Message.Chat.ID, "This is unsupported command.")
-					//msg.ReplyToMessageID = update.Message.MessageID
-					//t.Send(msg)
-				}
-			} else {
-				if update.Message.Chat.ID == config.TelegramAdminId() &&
-					(t.IsCommand(update.Message.Caption, "/import") || t.IsCommand(update.Message.Text, "/import")) {
-					log.Info().Msg("import!!!")
-					if update.Message.Document == nil {
-						log.Info().Msg("empty document")
-						continue
-					}
-					fileId := update.Message.Document.FileID
-					response, err := http.Get(fmt.Sprintf("https://api.telegram.org/bot%s/getFile?file_id=%s",
-						config.TelegramToken(), fileId))
-					if err != nil {
-						log.Info().Err(err).Msgf("download TG import file error")
-						continue
-					}
-					buf := new(bytes.Buffer)
-					buf.ReadFrom(response.Body)
-					result := buf.String()
-					if response.StatusCode >= 300 {
-						log.Debug().Str("tg import file some error ", result).Send()
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, result)
-						t.Send(msg)
-					}
-					fileInfo := TgFileInfo{}
-					err = json.Unmarshal([]byte(result), &fileInfo)
-					if err != nil {
-						log.Info().Err(err).Msg("Decode fileInfo err")
-						continue
-					}
-
-					fileUrl := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s",
-						config.TelegramToken(), fileInfo.Result.FilePath)
-
-					response, err = http.Get(fileUrl)
-					if err != nil {
-						log.Info().Err(err).Msgf("download TG import file error")
-						continue
-					}
-					buf = new(bytes.Buffer)
-					buf.ReadFrom(response.Body)
-
-					/*
-						log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmImportContacts, models.AmoCrmImportContactsEvent{
-							Data:   buf.Bytes(),
-							ChatId: update.Message.Chat.ID,
-						})).Send()
-					*/
-
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "import downloaded")
-					t.Send(msg)
-					continue
-				}
-				/*
-					tgUser := models.TelegramUser{
-						ID:           update.Message.Chat.ID,
-						FirstName:    update.Message.From.FirstName,
-						LastName:     update.Message.From.LastName,
-						UserName:     update.Message.From.UserName,
-						LanguageCode: update.Message.From.LanguageCode,
-						IsBot:        update.Message.From.IsBot,
-					}
-				*/
-				fileId := ""
-				//var messageMedia models.AmoCrmMMessageMedia
-				switch {
-				case update.Message.Photo != nil:
-					//messageMedia.Type = "picture"
-					for _, photoItem := range *update.Message.Photo {
-						fileId = photoItem.FileID
-						//messageMedia.FileSize = photoItem.FileSize
-					}
-				case update.Message.Sticker != nil:
-					//messageMedia.Type = "sticker"
-					fileId = update.Message.Sticker.FileID
-					//messageMedia.FileSize = update.Message.Sticker.FileSize
-				case update.Message.Video != nil:
-					//messageMedia.Type = "video"
-					fileId = update.Message.Video.FileID
-					//messageMedia.FileSize = update.Message.Video.FileSize
-				case update.Message.Voice != nil:
-					//messageMedia.Type = "voice"
-					fileId = update.Message.Voice.FileID
-					//messageMedia.FileSize = update.Message.Voice.FileSize
-				case update.Message.Audio != nil:
-					//messageMedia.Type = "audio"
-					fileId = update.Message.Audio.FileID
-					//messageMedia.FileSize = update.Message.Audio.FileSize
-				case update.Message.Document != nil:
-					//messageMedia.Type = "file"
-					fileId = update.Message.Document.FileID
-					//messageMedia.FileSize = update.Message.Document.FileSize
-					//messageMedia.FileName = update.Message.Document.FileName
-				case update.Message.VideoNote != nil:
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "unsupported command")
-					t.Send(msg)
-					continue
-				case update.Message.Animation != nil:
-					//messageMedia.Type = "file"
-					fileId = update.Message.Animation.FileID
-					//messageMedia.FileSize = update.Message.Animation.FileSize
-					//messageMedia.FileName = update.Message.Animation.FileName
-				case update.Message.Venue != nil:
-					log.Info().Interface("tg file ignore Venue", update).Send()
-				case update.Message.Contact != nil:
-					log.Info().Interface("tg file ignore Contact", update).Send()
-					/*
-						log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmMessageSend, models.AmoCrmMessageSendEvent{
-							Message: fmt.Sprintf("Contact %s %s [%v] phone %s",
-								update.Message.Contact.FirstName,
-								update.Message.Contact.LastName,
-								update.Message.Contact.UserID,
-								update.Message.Contact.PhoneNumber,
-							),
-							TelegramUser: tgUser,
-						})).Send()
-					*/
-				case update.Message.Location != nil:
-					/*
-						log.Info().Str("tg file Location", fmt.Sprintf("%f.5 %f.5", update.Message.Location.Longitude, update.Message.Location.Latitude)).Send()
-						log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmMessageSend, models.AmoCrmMessageSendEvent{
-							Message: fmt.Sprintf("Location %f.5 %f.5",
-								update.Message.Location.Longitude,
-								update.Message.Location.Latitude),
-							TelegramUser: tgUser,
-						})).Send()
-					*/
-				}
-				if fileId == "" {
-					log.Info().Interface("tg file info not found", update).Send()
-					continue
-				}
-
-				response, err := http.Get(fmt.Sprintf("https://api.telegram.org/bot%s/getFile?file_id=%s",
-					config.TelegramToken(), fileId))
-				if err != nil {
-					log.Info().Err(err).Msgf("download TG photo error")
-				}
-				buf := new(bytes.Buffer)
-				buf.ReadFrom(response.Body)
-				result := buf.String()
-				log.Debug().Str("tg fileInfo unparsed", result).Send()
-				fileInfo := TgFileInfo{}
-				err = json.Unmarshal([]byte(result), &fileInfo)
-				if err != nil {
-					log.Info().Err(err).Msg("Decode fileInfo err")
-					continue
-				}
-				//messageMedia.Media = fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", config.TelegramToken(), fileInfo.Result.FilePath)
-				log.Info().Interface("fileInfo", fileInfo).Send()
-				/*
-					log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmFileSend, models.AmoCrmMessageSendFileEvent{
-						MessageMedia: messageMedia,
-						TelegramUser: tgUser,
-						Message:      update.Message.Caption,
-					})).Send()
-				*/
-			}
+			*/
 		}
 	}
 }

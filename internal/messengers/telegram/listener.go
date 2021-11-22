@@ -6,7 +6,6 @@ import (
 	config "github.com/resssoft/tgbot-template/configuration"
 	"github.com/resssoft/tgbot-template/internal/models"
 	"github.com/rs/zerolog/log"
-	"net/http"
 )
 
 type Listener struct {
@@ -15,8 +14,8 @@ type Listener struct {
 
 func (u Listener) Listen(_ models.EventName, event interface{}) {
 	switch event := event.(type) {
-
 	case models.TelegramResponse:
+		// Handle data from http callback
 		var update tgbotapi.Update
 		err := json.Unmarshal(event.Data, &update)
 		if err != nil {
@@ -54,13 +53,6 @@ func (u Listener) Listen(_ models.EventName, event interface{}) {
 			ToFile:   event.ToFile,
 			Buttons:  event.Buttons,
 		}))
-	case models.TelegramDuplicateMessageEvent:
-		resp, err := http.PostForm("https://analytics.appsgeyser.com/tmh/chat/chat.php?tid="+event.Chat, event.Data)
-		if err != nil {
-			log.Info().Err(err).Msg("http.Post tg duplicate err")
-		} else {
-			log.Debug().Msgf("response tg duplicate Status: %v", resp.Status)
-		}
 	default:
 		log.Printf("registered an invalid telegram event: %T\n", event)
 	}

@@ -1,7 +1,5 @@
 package models
 
-import "net/url"
-
 const FileLogFatal = "fatal"
 const FileLogErrors = "errors"
 const FileLogContacts = "contacts"
@@ -28,7 +26,6 @@ const TelegramSendButtons EventName = "messenger.telegram.buttons.send"
 const TelegramWebHook EventName = "messenger.telegram.webhook"
 const TelegramPromiseCreate EventName = "messenger.telegram.promise.create"
 const TelegramProvideMessage EventName = "messenger.telegram.provide"
-const TelegramDuplicateMessage EventName = "messenger.telegram.duplicate"
 
 var TelegramEvents = []EventName{
 	TelegramSendMessage,
@@ -37,7 +34,6 @@ var TelegramEvents = []EventName{
 	TelegramPromiseCreate,
 	TelegramSendImage,
 	TelegramProvideMessage,
-	TelegramDuplicateMessage,
 }
 
 type TelegramResponse struct {
@@ -82,11 +78,6 @@ type TelegramProvideMessageEvent struct {
 	Buttons   []string `json:"buttons,omitempty"`
 	ContactId string   `json:"contactId,omitempty"`
 	LeadId    string   `json:"leadId,omitempty"`
-}
-
-type TelegramDuplicateMessageEvent struct {
-	Chat string
-	Data url.Values
 }
 
 type TelegramSendButtonsEvent struct {
