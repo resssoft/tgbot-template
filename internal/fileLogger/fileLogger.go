@@ -15,6 +15,7 @@ const (
 	beforeFileCloseDuration = 1 * time.Second
 	statusCheckDuration     = 5 * time.Second
 	chanBufferSize          = 10000
+	eventsBuffer            = 500
 )
 
 type Application interface {
@@ -39,15 +40,18 @@ func Provide(dispatcher *mediator.Dispatcher) Application {
 		File:      make(map[string]logFile),
 		mapSafety: &sync.Mutex{},
 	}
-
+	listener := Listener{
+		Client: client,
+		events: make(chan interface{}, eventsBuffer),
+	}
 	if err := dispatcher.Register(
-		Listener{
-			Client: client,
-		},
+		listener,
 		models.FileLoggerEvents...); err != nil {
 		log.Info().Err(err).Send()
 	}
 	go client.checkStatus()
+	go client.eventsHandler(listener)
+	go client.eventsHandler(listener)
 	return client
 }
 

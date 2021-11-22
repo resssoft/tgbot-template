@@ -44,3 +44,10 @@ type TgFileInfo struct {
 		FilePath     string `json:"file_path,omitempty"`
 	} `json:"result,omitempty"`
 }
+
+type commandInfo struct {
+	names       []string
+	description string
+	permissions []int64
+	isPublic    bool
+}

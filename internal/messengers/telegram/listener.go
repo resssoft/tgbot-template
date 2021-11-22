@@ -9,7 +9,18 @@ import (
 )
 
 type Listener struct {
-	tgApp *tgConfig
+	tgApp  *tgConfig
+	events chan interface{}
+}
+
+func (u Listener) Push(_ models.EventName, eventData interface{}) {
+	u.events <- eventData
+}
+
+func (t *tgConfig) eventsHandler(u Listener) {
+	for event := range u.events {
+		u.Listen("", event)
+	}
 }
 
 func (u Listener) Listen(_ models.EventName, event interface{}) {

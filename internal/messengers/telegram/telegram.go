@@ -22,6 +22,7 @@ const (
 	maxConnections     = 10
 	updatesBuffer      = 1000
 	commandsBuffer     = 300
+	eventsBuffer       = 500
 )
 
 type TgApp interface {
@@ -56,14 +57,17 @@ func Initialize(dispatcher *mediator.Dispatcher) (TgApp, error) {
 		commands:     make(chan Command, commandsBuffer),
 	}
 	config.SetTelegramAdminBot(tgApp.BotName)
+	listener := Listener{
+		tgApp:  tgApp,
+		events: make(chan interface{}, eventsBuffer),
+	}
 	if err := dispatcher.Register(
-		Listener{
-			tgApp: tgApp,
-		}, models.TelegramEvents...); err != nil {
+		listener, models.TelegramEvents...); err != nil {
 		log.Info().Err(err).Send()
 	}
 	for i := 0; i < workers; i++ {
 		go tgApp.commandsHandler()
+		go tgApp.eventsHandler(listener)
 	}
 	return tgApp, nil
 }

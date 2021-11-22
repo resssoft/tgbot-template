@@ -14,23 +14,46 @@ import (
 	"time"
 )
 
-type SystemListener struct{}
-
 var onExit chan int
+
+type SystemListener struct {
+	events chan models.EventName
+}
+
+func (u SystemListener) Push(eventName models.EventName, _ interface{}) {
+	u.events <- eventName
+}
+
+func (u SystemListener) Listen(eventName models.EventName, _ interface{}) {
+	switch eventName {
+	case models.AppExit:
+		onExit <- 0
+	case models.SetLogDebugMode:
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	case models.SetLogInfoMode:
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	}
+}
+
+func eventsHandler(u SystemListener) {
+	for event := range u.events {
+		u.Listen(event, nil)
+	}
+}
 
 func main() {
 	var err error
 	onExit = make(chan int)
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 
+	systemListener := SystemListener{}
 	dispatcher := mediator.NewDispatcher()
 	if err := dispatcher.Register(
-		SystemListener{},
-		models.AppExit,
-		models.SetLogDebugMode,
-		models.SetLogInfoMode); err != nil {
+		systemListener,
+		models.SystemEvents...); err != nil {
 		log.Info().Err(err).Send()
 	}
+	go eventsHandler(systemListener)
 
 	loggerClient := fileLogger.Provide(dispatcher)
 	for filename, logName := range models.LogFiles {
@@ -72,16 +95,5 @@ func main() {
 
 	for code := range onExit {
 		os.Exit(code)
-	}
-}
-
-func (u SystemListener) Listen(eventName models.EventName, _ interface{}) {
-	switch eventName {
-	case models.AppExit:
-		onExit <- 0
-	case models.SetLogDebugMode:
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	case models.SetLogInfoMode:
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
 }

@@ -10,6 +10,24 @@ import (
 	"net/http"
 )
 
+var commandsInfo = map[string]commandInfo{
+	"ver": {
+		names:       []string{"/ver", "/version"},
+		description: "Get app version",
+		isPublic:    true,
+	},
+	"this": {
+		names:       []string{"/this"},
+		description: "Get user ID and chat ID",
+		isPublic:    true,
+	},
+	"info": {
+		names:       []string{"/info"},
+		description: "Get app info",
+		permissions: []int64{config.TelegramAdminId(), config.TelegramReportChatId()},
+	},
+}
+
 func (t *tgConfig) commandsHandler() {
 	log.Info().Msg("start commandsHandler")
 	for command := range t.commands {
@@ -22,12 +40,12 @@ func (t *tgConfig) commandsHandler() {
 			msg.ReplyMarkup = menu
 			t.Send(msg)
 
-		case t.CheckCommand(command.Name, 0, "/ver", "/version"):
+		case t.CheckCommand(command.Name, 0, commandsInfo["ver"].names...):
 			log.Info().Msg("version")
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, config.Version)
 			t.Send(msg)
 
-		case t.CheckCommand(command.Name, 0, "/this"):
+		case t.CheckCommand(command.Name, 0, commandsInfo["this"].names...):
 			log.Info().Msg("this")
 			statistic := fmt.Sprintf("Current chat: %v \nFrom %v",
 				command.Data.Message.Chat.ID,
@@ -40,7 +58,7 @@ func (t *tgConfig) commandsHandler() {
 			msg.ReplyMarkup = menu
 			t.Send(msg)
 
-		case t.CheckCommand(command.Name, chatId, "/info"):
+		case t.CheckCommand(command.Name, chatId, commandsInfo["info"].names...):
 			appStat, _ := json.MarshalIndent(config.GetMemUsage(), "", "    ")
 			t.Send(tgbotapi.NewMessage(update.Message.Chat.ID, string(appStat)))
 
@@ -98,10 +116,6 @@ func (t *tgConfig) commandsHandler() {
 			log.Info().Msgf("unhanding message %s", update.Message.Text)
 		}
 
-		if update.Message.Chat.ID == config.TelegramAdminId() ||
-			update.Message.Chat.ID == config.TelegramReportChatId() {
-
-		}
 		//TODO: save to file or db
 	}
 }

@@ -42,8 +42,13 @@ type TelegramResponse struct {
 
 const SetLogDebugMode EventName = "log.mode.debug"
 const SetLogInfoMode EventName = "log.mode.info"
-
 const AppExit EventName = "app.exit"
+
+var SystemEvents = []EventName{
+	SetLogDebugMode,
+	SetLogInfoMode,
+	AppExit,
+}
 
 const LogToFile EventName = "fileLogger.log.data"
 
@@ -53,6 +58,7 @@ var FileLoggerEvents = []EventName{
 
 type Listener interface {
 	Listen(eventName EventName, event interface{})
+	Push(eventName EventName, event interface{})
 }
 
 type Job struct {

@@ -86,6 +86,7 @@ func (d *Dispatcher) consume() {
 	var listener models.Listener
 	for job := range d.jobs {
 		listener, _ = d.GetEvent(job.EventName)
-		go listener.Listen(job.EventName, job.EventType)
+		//go listener.Listen(job.EventName, job.EventType)
+		listener.Push(job.EventName, job.EventType) //TODO: or go push? Add check limits
 	}
 }
