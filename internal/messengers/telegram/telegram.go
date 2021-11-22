@@ -78,18 +78,22 @@ func (t *tgConfig) IsCommand(msg, command string) bool {
 }
 
 func (t *tgConfig) Send(message tgbotapi.Chattable) (tgbotapi.Message, error) {
-	switch msg := message.(type) {
-	case tgbotapi.MessageConfig:
-		//TODO: add thread safe writes by mutex.Lock()
-		//tgUser, userExist := t.users[msg.ChatID]
-		if config.AmoCrmEventFromBotMessage() {
-			log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmMessageSend, models.AmoCrmMessageSendEvent{
-				Message:      msg.Text,
-				IsBot:        true,
-				TelegramUser: models.TelegramUser{ID: msg.ChatID},
-			})).Send()
+	/*
+		switch msg := message.(type) {
+		case tgbotapi.MessageConfig:
+			//TODO: add thread safe writes by mutex.Lock()
+			//tgUser, userExist := t.users[msg.ChatID]
+
+			if config.AmoCrmEventFromBotMessage() {
+				log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmMessageSend, models.AmoCrmMessageSendEvent{
+					Message:      msg.Text,
+					IsBot:        true,
+					TelegramUser: models.TelegramUser{ID: msg.ChatID},
+				})).Send()
+			}
+
 		}
-	}
+	*/
 	return t.BotTelegram.Send(message)
 }
 
@@ -252,7 +256,7 @@ func (t *tgConfig) SendButtons(chatId int64, msg string, buttons []string) (tgbo
 		KeyboardOpen: true,
 	}
 
-	if config.AmoCrmEventFromBotMessage() {
+	if false {
 		//TODO: add thread safe writes by mutex.Lock()
 		t.userPromises[chatId] = localPromise
 	}
@@ -261,13 +265,15 @@ func (t *tgConfig) SendButtons(chatId int64, msg string, buttons []string) (tgbo
 	for _, bText := range buttons {
 		msg += fmt.Sprintf("\n[%s]", bText)
 	}
-	if config.AmoCrmEventFromBotMessage() {
-		log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmMessageSend, models.AmoCrmMessageSendEvent{
-			Message:      msg,
-			IsBot:        true,
-			TelegramUser: models.TelegramUser{ID: chatId},
-		})).Send()
-	}
+	/*
+		if config.AmoCrmEventFromBotMessage() {
+			log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmMessageSend, models.AmoCrmMessageSendEvent{
+				Message:      msg,
+				IsBot:        true,
+				TelegramUser: models.TelegramUser{ID: chatId},
+			})).Send()
+		}
+	*/
 	return result, err
 }
 
@@ -333,21 +339,22 @@ func (t *tgConfig) MessageHandler() {
 		}
 		if update.CallbackQuery != nil {
 			log.Debug().Interface("CallbackQuery", update.CallbackQuery).Send()
-
-			if config.AmoCrmEventFromBotMessage() {
-				log.Info().Err(t.dispatcher.Dispatch(models.PipelineLeadAnswer, models.PipelineLeadAnswerEvent{
-					Message:   update.CallbackQuery.Data,
-					Messenger: "telegram",
-					User: models.TelegramUser{
-						ID:           update.CallbackQuery.Message.Chat.ID,
-						FirstName:    update.CallbackQuery.Message.From.FirstName,
-						LastName:     update.CallbackQuery.Message.From.LastName,
-						UserName:     update.CallbackQuery.Message.From.UserName,
-						LanguageCode: update.CallbackQuery.Message.From.LanguageCode,
-						IsBot:        update.CallbackQuery.Message.From.IsBot,
-					},
-				})).Send()
-			}
+			/*
+				if config.AmoCrmEventFromBotMessage() {
+					log.Info().Err(t.dispatcher.Dispatch(models.PipelineLeadAnswer, models.PipelineLeadAnswerEvent{
+						Message:   update.CallbackQuery.Data,
+						Messenger: "telegram",
+						User: models.TelegramUser{
+							ID:           update.CallbackQuery.Message.Chat.ID,
+							FirstName:    update.CallbackQuery.Message.From.FirstName,
+							LastName:     update.CallbackQuery.Message.From.LastName,
+							UserName:     update.CallbackQuery.Message.From.UserName,
+							LanguageCode: update.CallbackQuery.Message.From.LanguageCode,
+							IsBot:        update.CallbackQuery.Message.From.IsBot,
+						},
+					})).Send()
+				}
+			*/
 			msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, update.CallbackQuery.Message.Command())
 			t.Send(msg)
 		} else {
@@ -379,18 +386,6 @@ func (t *tgConfig) MessageHandler() {
 				if t.IsCommand(commandName, "/ver") {
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, config.Version)
 					t.Send(msg)
-					continue
-				}
-
-				// TODO: remove later
-				if t.IsCommand(commandName, "/CheckRandoms") {
-					countForRandom := 50
-					if len(splitedCommands) >= 2 {
-						countForRandom, _ = strconv.Atoi(splitedCommands[1])
-					}
-					t.dispatcher.Dispatch(models.AmoCrmSendInfo, models.AmoCrmCheckRandomsEvent{
-						ChatId: update.Message.Chat.ID,
-						Count:  countForRandom})
 					continue
 				}
 
@@ -431,9 +426,6 @@ func (t *tgConfig) MessageHandler() {
 					if t.IsCommand(commandName, "/info") {
 						appStat, _ := json.MarshalIndent(config.GetMemUsage(), "", "    ")
 						t.Send(tgbotapi.NewMessage(update.Message.Chat.ID, string(appStat)))
-						log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmSendInfo, models.AmoCrmSendInfoEvent{
-							ChatId: update.Message.Chat.ID,
-						})).Send()
 						continue
 					}
 
@@ -468,77 +460,14 @@ func (t *tgConfig) MessageHandler() {
 						t.Send(msg)
 						continue
 					}
-					if t.IsCommand(commandName, "/fillContacts") {
-						log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmFillContacts, models.AmoCrmFillContactsEvent{})).Send()
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "event sent")
-						t.Send(msg)
-						continue
-					}
+
 					if t.IsCommand(commandName, "/logPromises") {
 						log.Info().Msgf("userPromises: count %v list: \n %#v", len(t.userPromises), t.userPromises)
 						continue
 					}
-					if t.IsCommand(commandName, "/contactsByTG") {
-						log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmSendContacts, models.AmoCrmSendContactsEvent{
-							TelegramId: commandValue,
-						})).Send()
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "event sent")
-						t.Send(msg)
-						continue
-					}
-					if t.IsCommand(commandName, "/export") {
-						log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmSendContacts, models.AmoCrmSendContactsEvent{
-							TelegramId: "1",
-						})).Send()
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "event sent")
-						t.Send(msg)
-						continue
-					}
-					if t.IsCommand(commandName, "/cronSleepers") {
-						log.Info().Err(t.dispatcher.Dispatch(
-							models.AmoCrmCronSleepers,
-							models.AmoCrmCronSleepersEvent{})).Send()
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "event sent")
-						t.Send(msg)
-						continue
-					}
 
-					if t.IsCommand(commandName, "/contactsByTGLogin") {
-						log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmSendContacts, models.AmoCrmSendContactsEvent{
-							TelegramName: commandValue,
-						})).Send()
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "event sent")
-						t.Send(msg)
-						continue
-					}
-					if t.IsCommand(commandName, "/contactsByContact") {
-						log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmSendContacts, models.AmoCrmSendContactsEvent{
-							ContactId: commandValue,
-						})).Send()
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "event sent")
-						t.Send(msg)
-						continue
-					}
-					if t.IsCommand(commandName, "/contactsByLead") {
-						log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmSendContacts, models.AmoCrmSendContactsEvent{
-							LeadId: commandValue,
-						})).Send()
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "event sent")
-						t.Send(msg)
-						continue
-					}
-					if t.IsCommand(commandName, "/contactsBySource") {
-						log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmSendContacts, models.AmoCrmSendContactsEvent{
-							Source: commandValue,
-						})).Send()
-						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "event sent")
-						t.Send(msg)
-						continue
-					}
-					if t.IsCommand(commandName, "/contactRemove") {
-						log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmRemoveContacts, models.AmoCrmRemoveContactsEvent{
-							ContactId: commandValue,
-						})).Send()
+					if t.IsCommand(commandName, "/export") {
+						// TODO:release
 						msg := tgbotapi.NewMessage(update.Message.Chat.ID, "event sent")
 						t.Send(msg)
 						continue
@@ -569,16 +498,21 @@ func (t *tgConfig) MessageHandler() {
 				if commandsCount == 0 {
 					continue
 				}
-				srcTag := ""
-				if commandName == "/start" {
-					srcTag = commandValue
-				}
-				log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmMessageSend, models.AmoCrmMessageSendEvent{
-					Message:      messageText,
-					IsBot:        false,
-					TelegramUser: tgUser,
-					Source:       srcTag,
-				})).Send()
+				/*
+					srcTag := ""
+					if commandName == "/start" {
+						srcTag = commandValue
+					}
+				*/
+				/*
+					log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmMessageSend, models.AmoCrmMessageSendEvent{
+						Message:      messageText,
+						IsBot:        false,
+						TelegramUser: tgUser,
+						Source:       srcTag,
+					})).Send()
+				*/
+
 				//log.Printf("[%s, %n] %s", update.Message.Chat.UserName, update.Message.Chat.ID, update.Message.Text)
 				//log.Printf("%#v", t.userPromises)
 
@@ -587,19 +521,20 @@ func (t *tgConfig) MessageHandler() {
 					t.users[update.Message.Chat.ID] = tgUser
 					if _, ok := t.userPromises[update.Message.Chat.ID]; ok {
 						log.Info().Msg("handle Promises")
-						log.Info().Err(t.dispatcher.Dispatch(models.PipelineLeadAnswer, models.PipelineLeadAnswerEvent{
-							Message:   update.Message.Text,
-							Messenger: "telegram",
-							User: models.TelegramUser{
-								ID:           update.Message.Chat.ID,
-								FirstName:    update.Message.From.FirstName,
-								LastName:     update.Message.From.LastName,
-								UserName:     update.Message.From.UserName,
-								LanguageCode: update.Message.From.LanguageCode,
-								IsBot:        update.Message.From.IsBot,
-							},
-						})).Send()
-
+						/*
+							log.Info().Err(t.dispatcher.Dispatch(models.PipelineLeadAnswer, models.PipelineLeadAnswerEvent{
+								Message:   update.Message.Text,
+								Messenger: "telegram",
+								User: models.TelegramUser{
+									ID:           update.Message.Chat.ID,
+									FirstName:    update.Message.From.FirstName,
+									LastName:     update.Message.From.LastName,
+									UserName:     update.Message.From.UserName,
+									LanguageCode: update.Message.From.LanguageCode,
+									IsBot:        update.Message.From.IsBot,
+								},
+							})).Send()
+						*/
 						delete(t.userPromises, update.Message.Chat.ID)
 						continue
 					}
@@ -607,15 +542,17 @@ func (t *tgConfig) MessageHandler() {
 
 				switch commandName {
 				case "/start":
-					if config.AmoCrmEventFromBotMessage() {
-						if commandValue != "" {
-							log.Info().Err(t.dispatcher.Dispatch(models.PipelineLeadAdd, models.PipelineLeadAddEvent{
-								Source:    commandValue,
-								Messenger: "telegram",
-								User:      tgUser,
-							})).Send()
+					/*
+						if config.AmoCrmEventFromBotMessage() {
+							if commandValue != "" {
+								log.Info().Err(t.dispatcher.Dispatch(models.PipelineLeadAdd, models.PipelineLeadAddEvent{
+									Source:    commandValue,
+									Messenger: "telegram",
+									User:      tgUser,
+								})).Send()
+							}
 						}
-					}
+					*/
 
 				default:
 					//msg := tgbotapi.NewMessage(update.Message.Chat.ID, "This is unsupported command.")
@@ -663,83 +600,91 @@ func (t *tgConfig) MessageHandler() {
 					buf = new(bytes.Buffer)
 					buf.ReadFrom(response.Body)
 
-					log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmImportContacts, models.AmoCrmImportContactsEvent{
-						Data:   buf.Bytes(),
-						ChatId: update.Message.Chat.ID,
-					})).Send()
+					/*
+						log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmImportContacts, models.AmoCrmImportContactsEvent{
+							Data:   buf.Bytes(),
+							ChatId: update.Message.Chat.ID,
+						})).Send()
+					*/
 
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "import downloaded")
 					t.Send(msg)
 					continue
 				}
-				tgUser := models.TelegramUser{
-					ID:           update.Message.Chat.ID,
-					FirstName:    update.Message.From.FirstName,
-					LastName:     update.Message.From.LastName,
-					UserName:     update.Message.From.UserName,
-					LanguageCode: update.Message.From.LanguageCode,
-					IsBot:        update.Message.From.IsBot,
-				}
+				/*
+					tgUser := models.TelegramUser{
+						ID:           update.Message.Chat.ID,
+						FirstName:    update.Message.From.FirstName,
+						LastName:     update.Message.From.LastName,
+						UserName:     update.Message.From.UserName,
+						LanguageCode: update.Message.From.LanguageCode,
+						IsBot:        update.Message.From.IsBot,
+					}
+				*/
 				fileId := ""
-				var messageMedia models.AmoCrmMMessageMedia
+				//var messageMedia models.AmoCrmMMessageMedia
 				switch {
 				case update.Message.Photo != nil:
-					messageMedia.Type = "picture"
+					//messageMedia.Type = "picture"
 					for _, photoItem := range *update.Message.Photo {
 						fileId = photoItem.FileID
-						messageMedia.FileSize = photoItem.FileSize
+						//messageMedia.FileSize = photoItem.FileSize
 					}
 				case update.Message.Sticker != nil:
-					messageMedia.Type = "sticker"
+					//messageMedia.Type = "sticker"
 					fileId = update.Message.Sticker.FileID
-					messageMedia.FileSize = update.Message.Sticker.FileSize
+					//messageMedia.FileSize = update.Message.Sticker.FileSize
 				case update.Message.Video != nil:
-					messageMedia.Type = "video"
+					//messageMedia.Type = "video"
 					fileId = update.Message.Video.FileID
-					messageMedia.FileSize = update.Message.Video.FileSize
+					//messageMedia.FileSize = update.Message.Video.FileSize
 				case update.Message.Voice != nil:
-					messageMedia.Type = "voice"
+					//messageMedia.Type = "voice"
 					fileId = update.Message.Voice.FileID
-					messageMedia.FileSize = update.Message.Voice.FileSize
+					//messageMedia.FileSize = update.Message.Voice.FileSize
 				case update.Message.Audio != nil:
-					messageMedia.Type = "audio"
+					//messageMedia.Type = "audio"
 					fileId = update.Message.Audio.FileID
-					messageMedia.FileSize = update.Message.Audio.FileSize
+					//messageMedia.FileSize = update.Message.Audio.FileSize
 				case update.Message.Document != nil:
-					messageMedia.Type = "file"
+					//messageMedia.Type = "file"
 					fileId = update.Message.Document.FileID
-					messageMedia.FileSize = update.Message.Document.FileSize
-					messageMedia.FileName = update.Message.Document.FileName
+					//messageMedia.FileSize = update.Message.Document.FileSize
+					//messageMedia.FileName = update.Message.Document.FileName
 				case update.Message.VideoNote != nil:
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "unsupported command")
 					t.Send(msg)
 					continue
 				case update.Message.Animation != nil:
-					messageMedia.Type = "file"
+					//messageMedia.Type = "file"
 					fileId = update.Message.Animation.FileID
-					messageMedia.FileSize = update.Message.Animation.FileSize
-					messageMedia.FileName = update.Message.Animation.FileName
+					//messageMedia.FileSize = update.Message.Animation.FileSize
+					//messageMedia.FileName = update.Message.Animation.FileName
 				case update.Message.Venue != nil:
 					log.Info().Interface("tg file ignore Venue", update).Send()
 				case update.Message.Contact != nil:
 					log.Info().Interface("tg file ignore Contact", update).Send()
-					log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmMessageSend, models.AmoCrmMessageSendEvent{
-						Message: fmt.Sprintf("Contact %s %s [%v] phone %s",
-							update.Message.Contact.FirstName,
-							update.Message.Contact.LastName,
-							update.Message.Contact.UserID,
-							update.Message.Contact.PhoneNumber,
-						),
-						TelegramUser: tgUser,
-					})).Send()
+					/*
+						log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmMessageSend, models.AmoCrmMessageSendEvent{
+							Message: fmt.Sprintf("Contact %s %s [%v] phone %s",
+								update.Message.Contact.FirstName,
+								update.Message.Contact.LastName,
+								update.Message.Contact.UserID,
+								update.Message.Contact.PhoneNumber,
+							),
+							TelegramUser: tgUser,
+						})).Send()
+					*/
 				case update.Message.Location != nil:
-					log.Info().Str("tg file Location", fmt.Sprintf("%f.5 %f.5", update.Message.Location.Longitude, update.Message.Location.Latitude)).Send()
-					log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmMessageSend, models.AmoCrmMessageSendEvent{
-						Message: fmt.Sprintf("Location %f.5 %f.5",
-							update.Message.Location.Longitude,
-							update.Message.Location.Latitude),
-						TelegramUser: tgUser,
-					})).Send()
+					/*
+						log.Info().Str("tg file Location", fmt.Sprintf("%f.5 %f.5", update.Message.Location.Longitude, update.Message.Location.Latitude)).Send()
+						log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmMessageSend, models.AmoCrmMessageSendEvent{
+							Message: fmt.Sprintf("Location %f.5 %f.5",
+								update.Message.Location.Longitude,
+								update.Message.Location.Latitude),
+							TelegramUser: tgUser,
+						})).Send()
+					*/
 				}
 				if fileId == "" {
 					log.Info().Interface("tg file info not found", update).Send()
@@ -761,15 +706,15 @@ func (t *tgConfig) MessageHandler() {
 					log.Info().Err(err).Msg("Decode fileInfo err")
 					continue
 				}
-				messageMedia.Media = fmt.Sprintf("https://api.telegram.org/file/bot%s/%s",
-					config.TelegramToken(), fileInfo.Result.FilePath)
+				//messageMedia.Media = fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", config.TelegramToken(), fileInfo.Result.FilePath)
 				log.Info().Interface("fileInfo", fileInfo).Send()
-				log.Info().Interface("messageMedia", messageMedia).Send()
-				log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmFileSend, models.AmoCrmMessageSendFileEvent{
-					MessageMedia: messageMedia,
-					TelegramUser: tgUser,
-					Message:      update.Message.Caption,
-				})).Send()
+				/*
+					log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmFileSend, models.AmoCrmMessageSendFileEvent{
+						MessageMedia: messageMedia,
+						TelegramUser: tgUser,
+						Message:      update.Message.Caption,
+					})).Send()
+				*/
 			}
 		}
 	}

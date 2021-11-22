@@ -20,6 +20,8 @@ var LogFiles = map[string]string{
 
 type EventName string
 
+const NothingEvent EventName = "nothing"
+
 const TelegramSendMessage EventName = "messenger.telegram.message.send"
 const TelegramSendImage EventName = "messenger.telegram.image.send"
 const TelegramSendButtons EventName = "messenger.telegram.buttons.send"
@@ -42,50 +44,6 @@ type TelegramResponse struct {
 	Data []byte
 }
 
-const PipelineLeadAdd EventName = "pipeline.lead.add"
-const PipelineLeadAnswer EventName = "pipeline.lead.answer"
-const PipelineLeadWebhook EventName = "pipeline.lead.webhook"
-const PipelineConfigUpload EventName = "pipeline.config.upload"
-
-var PipelineEvents = []EventName{
-	PipelineLeadAdd,
-	PipelineLeadAnswer,
-	PipelineLeadWebhook,
-	PipelineConfigUpload,
-}
-
-const AmoCrmWebhookAuth EventName = "amocrm.webhook.auth"
-const AmoCrmMessageSend EventName = "amocrm.message.send"
-const AmoCrmFileSend EventName = "amocrm.file.send"
-const AmoCrmWebhookChat EventName = "amocrm.webhook.chat"
-const AmoCrmRefreshToken EventName = "amocrm.token.refresh"
-const AmoCrmFillContacts EventName = "amocrm.contacts.fill"
-const AmoCrmSendInfo EventName = "amocrm.info.send"
-const AmoCrmSendContacts EventName = "amocrm.contacts.send"
-const AmoCrmRemoveContacts EventName = "amocrm.contacts.remove"
-const AmoCrmAccessToken EventName = "amocrm.token.access"
-const AmoCrmUserData EventName = "amocrm.data.user"
-const AmoCrmImportContacts EventName = "amocrm.data.import"
-const AmoCrmWebhookLeadStatus EventName = "amocrm.webhook.lead.status"
-const AmoCrmCronSleepers EventName = "amocrm.cron.sleepers"
-
-var AmoCrmEvents = []EventName{
-	AmoCrmWebhookAuth,
-	AmoCrmMessageSend,
-	AmoCrmWebhookChat,
-	AmoCrmFileSend,
-	AmoCrmRefreshToken,
-	AmoCrmFillContacts,
-	AmoCrmSendInfo,
-	AmoCrmSendContacts,
-	AmoCrmRemoveContacts,
-	AmoCrmAccessToken,
-	AmoCrmUserData,
-	AmoCrmImportContacts,
-	AmoCrmWebhookLeadStatus,
-	AmoCrmCronSleepers,
-}
-
 const SetLogDebugMode EventName = "log.mode.debug"
 const SetLogInfoMode EventName = "log.mode.info"
 
@@ -105,8 +63,6 @@ type Job struct {
 	EventName EventName
 	EventType interface{}
 }
-
-type AmoCrmCronSleepersEvent struct{}
 
 type TelegramSendMessageEvent struct {
 	ChatId   int64
@@ -145,90 +101,8 @@ type UpdateUserTelegramDataEvent struct {
 	User  TelegramUser
 }
 
-type PipelineLeadAddEvent struct {
-	Source    string
-	Messenger string
-	User      TelegramUser
-}
-
-type PipelineLeadAnswerEvent struct {
-	Message   string
-	Messenger string
-	User      TelegramUser
-}
-
-type PipelineLeadWebhookEvent struct {
-	Data AmoCrmChangePipeline
-}
-
-type PipelineConfigUploadEvent struct {
-	PipelineId int
-	Config     []byte
-}
-
 type TelegramPromiseCreateEvent struct {
 	User int64
-}
-
-type AmoCrmOAuthEvent struct {
-	Code     string
-	Referer  string
-	ClientId string
-	Widget   string
-}
-
-type AmoCrmMessageSendEvent struct {
-	Message      string
-	IsBot        bool
-	TelegramUser TelegramUser
-	Source       string
-}
-
-type AmoCrmMessageChatRequestEvent struct {
-	Data string
-}
-
-type AmoCrmMessageSendFileEvent struct {
-	MessageMedia AmoCrmMMessageMedia
-	TelegramUser TelegramUser
-	Message      string
-}
-
-type AmoCrmRefreshTokenEvent struct{}
-
-type AmoCrmAccessTokenEvent struct{}
-
-type AmoCrmFillContactsEvent struct{}
-
-type AmoCrmSendInfoEvent struct {
-	ChatId int64
-}
-
-type AmoCrmSendContactsEvent struct {
-	TelegramId   string
-	TelegramName string
-	ContactId    string
-	LeadId       string
-	Source       string
-}
-
-type AmoCrmImportContactsEvent struct {
-	Data   []byte
-	ChatId int64
-}
-
-type AmoCrmRemoveContactsEvent struct {
-	TelegramId   string
-	TelegramName string
-	ContactId    string
-	LeadId       string
-}
-
-type AmoCrmMMessageMedia struct {
-	Type     string
-	Media    string
-	FileName string
-	FileSize int
 }
 
 type FileLoggerEvent struct {
@@ -236,12 +110,6 @@ type FileLoggerEvent struct {
 	Data        string
 	WithoutTime bool
 	ToDebug     bool
-}
-
-// TODO: remove later
-type AmoCrmCheckRandomsEvent struct {
-	ChatId int64
-	Count  int
 }
 
 type Secure struct {
@@ -257,19 +125,4 @@ type UserFilter struct {
 	Conversation string `json:"conversation,omitempty"`
 	Source       string `json:"source,omitempty"`
 	BlockedBot   int64  `json:"blockedBot,omitempty"`
-}
-
-type AmoCrmUserDataEvent struct {
-	ChanData *chan interface{}
-	Filter   UserFilter
-}
-
-type ResponseUserInfo struct {
-	Data  []Lead `json:"data"`
-	Error error  `json:"error"`
-	Count int    `json:"count"`
-}
-
-type AmoCrmWebhookLeadStatusEvent struct {
-	Data string
 }

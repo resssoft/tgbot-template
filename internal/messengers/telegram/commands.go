@@ -11,7 +11,7 @@ func (t *tgConfig) commandsHandler() {
 		case "ver", "version":
 			msg := tgbotapi.NewMessage(command.Data.Message.Chat.ID, config.Version)
 			t.Send(msg)
-		case "ver", "version":
+		case "2ver", "ve2rsion":
 			msg := tgbotapi.NewMessage(command.Data.Message.Chat.ID, config.Version)
 			t.Send(msg)
 		}
