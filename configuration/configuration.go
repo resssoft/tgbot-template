@@ -45,9 +45,6 @@ type serverInfo struct {
 	Uptime      string `json:"serverUptime"`
 	MainChat    string `json:"MainChat"`
 	LogChat     string `json:"LogChat"`
-	Pipeline    string `json:"pipeline"`
-	LeadStatus  string `json:"leadStatus"`
-	LeadStatusB string `json:"leadStatusBot"`
 }
 
 func init() {
@@ -111,72 +108,8 @@ func TelegramCallBackUri() string {
 	return viper.GetString("telegram.callBackUri")
 }
 
-func AmoCrmSecret() string {
-	return viper.GetString("amocrm.clientSecret")
-}
-
-func AmoCrmClientId() string {
-	return viper.GetString("amocrm.clientId")
-}
-
-func AmoCrmRedirectUri() string {
-	return viper.GetString("amocrm.redirectUri")
-}
-
-func AmoCrmAmojoId() string {
-	return viper.GetString("amocrm.amojoId")
-}
-
-func AmoCrmChannelSecret() string {
-	return viper.GetString("amocrm.channel.secretKey")
-}
-
-func AmoCrmScopeId() string {
-	return viper.GetString("amocrm.channel.scopeId")
-}
-
-func AmoCrmUri() string {
-	return viper.GetString("amocrm.uri")
-}
-
-func AmoCrmPipeline() int {
-	return viper.GetInt("amocrm.pipeline")
-}
-
-func SetAmoCrmPipeline(value int) {
-	viper.Set("amocrm.pipeline", value)
-}
-
-func AmoCrmLeadStatus() int {
-	return viper.GetInt("amocrm.leadStatus")
-}
-
-func SetAmoCrmLeadStatus(value int) {
-	viper.Set("amocrm.leadStatus", value)
-}
-
-func AmoCrmLeadStatusBot() int {
-	return viper.GetInt("amocrm.leadStatusBot")
-}
-
-func SetAmoCrmLeadStatusBot(value int) {
-	viper.Set("amocrm.leadStatusBot", value)
-}
-
-func AmoCrmEventFromBotMessage() bool {
-	return viper.GetBool("amocrm.sendCrmEventFromBotMessage")
-}
-
 func LogPath() string {
 	return viper.GetString("log.path")
-}
-
-func GetFacebookPixelId() string {
-	return viper.GetString("facebook.pixelId")
-}
-
-func GetFacebookAccessToken() string {
-	return viper.GetString("facebook.accessToken")
 }
 
 func GetMemUsage() AppStatus {
@@ -205,9 +138,6 @@ func GetMemUsage() AppStatus {
 			Uptime:      durafmt.Parse(time.Now().Sub(startTime)).LimitFirstN(2).String(),
 			MainChat:    fmt.Sprintf("%v", TelegramAdminId()),
 			LogChat:     fmt.Sprintf("%v", TelegramReportChatId()),
-			Pipeline:    fmt.Sprintf("%v", AmoCrmPipeline()),
-			LeadStatus:  fmt.Sprintf("%v", AmoCrmLeadStatus()),
-			LeadStatusB: fmt.Sprintf("%v", AmoCrmLeadStatusBot()),
 		},
 	}
 }

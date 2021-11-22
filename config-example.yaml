@@ -1,0 +1,18 @@
+loglevel: debug
+name: BotName
+server:
+  url: :8089
+  prefix: /urlprefix
+telegram:
+  token: 0000000:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+  admin: 111111111
+  chat: -111111111
+  exitOtherGroups: false
+  callBackUrl: https://example.com/urlprefix/telegram/
+  callBackUri: /telegram/
+db:
+  mongoDb:
+    url: mongodb://root:password@127.0.0.1:27017/admin
+    dbname: dbname
+log:
+  path: /var/log/
