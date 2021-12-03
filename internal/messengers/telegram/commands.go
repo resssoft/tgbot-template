@@ -6,46 +6,82 @@ import (
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	config "github.com/resssoft/tgbot-template/configuration"
+	"github.com/resssoft/tgbot-template/internal/models"
 	"github.com/rs/zerolog/log"
 	"net/http"
+	"strings"
 )
 
 var commandsInfo = map[string]commandInfo{
 	"ver": {
-		names:       []string{"/ver", "/version"},
+		aliases:     []string{"/ver", "/version"},
 		description: "Get app version",
 		isPublic:    true,
 	},
 	"this": {
-		names:       []string{"/this"},
+		aliases:     []string{"/this"},
 		description: "Get user ID and chat ID",
 		isPublic:    true,
 	},
 	"info": {
-		names:       []string{"/info"},
+		name:        "Bot info",
+		aliases:     []string{"/info"},
 		description: "Get app info",
 		permissions: []int64{config.TelegramAdminId(), config.TelegramReportChatId()},
+		toMenu:      true,
 	},
+	"menu": {
+		aliases:     []string{"/menu", "меню", "покажи меню", "помощь", "справка"},
+		description: "Show menu",
+		permissions: []int64{config.TelegramAdminId(), config.TelegramReportChatId()},
+	},
+}
+
+func toPublicUser(user *tgbotapi.User) models.TelegramUser {
+	if user == nil {
+		return models.TelegramUser{}
+	}
+	return models.TelegramUser{
+		ID:           int64(user.ID),
+		FirstName:    user.FirstName,
+		LastName:     user.LastName,
+		UserName:     user.UserName,
+		LanguageCode: user.LanguageCode,
+		IsBot:        user.IsBot,
+	}
 }
 
 func (t *tgConfig) commandsHandler() {
 	log.Info().Msg("start commandsHandler")
 	for command := range t.commands {
 		update := command.Data
-		chatId := update.Message.Chat.ID
-		log.Info().Msg("Handle command")
+		chatId := int64(0)
+		//TODO: check promise
+		if command.IsCallBack {
+			log.Debug().Msg("Handle CallBack")
+			chatId = update.CallbackQuery.Message.Chat.ID
+			log.Info().Err(t.dispatcher.Dispatch(models.EventName(update.CallbackQuery.Data), models.TelegramCallBackEvent{
+				User:      toPublicUser(update.CallbackQuery.From),
+				Type:      update.CallbackQuery.Data,
+				MessageId: chatId,
+			})).Send()
+			continue
+		}
+		chatId = update.Message.Chat.ID
+		log.Debug().Msg("Handle command")
+		commandName := strings.ToLower(command.Name)
 		switch {
-		case t.CheckCommand(command.Name, 0, "/start"):
+		case t.CheckCommand(commandName, 0, "/start"):
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "menu")
 			msg.ReplyMarkup = menu
 			t.Send(msg)
 
-		case t.CheckCommand(command.Name, 0, commandsInfo["ver"].names...):
+		case t.CheckCommand(commandName, 0, commandsInfo["ver"].aliases...):
 			log.Info().Msg("version")
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, config.Version)
 			t.Send(msg)
 
-		case t.CheckCommand(command.Name, 0, commandsInfo["this"].names...):
+		case t.CheckCommand(commandName, 0, commandsInfo["this"].aliases...):
 			log.Info().Msg("this")
 			statistic := fmt.Sprintf("Current chat: %v \nFrom %v",
 				command.Data.Message.Chat.ID,
@@ -53,21 +89,21 @@ func (t *tgConfig) commandsHandler() {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, statistic)
 			t.Send(msg)
 
-		case t.CheckCommand(command.Name, 0, "/test"):
+		case t.CheckCommand(commandName, 0, "/test"):
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "menu")
 			msg.ReplyMarkup = menu
 			t.Send(msg)
 
-		case t.CheckCommand(command.Name, chatId, commandsInfo["info"].names...):
+		case t.CheckCommand(commandName, chatId, commandsInfo["info"].aliases...):
 			appStat, _ := json.MarshalIndent(config.GetMemUsage(), "", "    ")
 			t.Send(tgbotapi.NewMessage(update.Message.Chat.ID, string(appStat)))
 
-		case t.CheckCommand(command.Name, chatId, "/eventTest"):
+		case t.CheckCommand(commandName, chatId, "/eventTest"):
 			//log.Info().Err(t.dispatcher.Dispatch(models.AmoCrmRefreshToken, models.AmoCrmRefreshTokenEvent{})).Send()
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "event sent")
 			t.Send(msg)
 
-		case t.CheckCommand(command.Name, chatId, "/import"):
+		case t.CheckCommand(commandName, chatId, "/import"):
 			log.Info().Msg("import!!!")
 			if update.Message.Document == nil {
 				log.Info().Msg("empty document")
@@ -112,6 +148,16 @@ func (t *tgConfig) commandsHandler() {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "import downloaded")
 			t.Send(msg)
 
+		case t.CheckCommand(commandName, 0, commandsInfo["menu"].aliases...):
+			var keyboard [][]tgbotapi.InlineKeyboardButton
+			for code, command := range commandsInfo {
+				keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
+					tgbotapi.NewInlineKeyboardButtonData(command.name, code),
+				})
+			}
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "menu")
+			msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(keyboard...)
+			t.Send(msg)
 		default:
 			log.Info().Msgf("unhanding message %s", update.Message.Text)
 		}

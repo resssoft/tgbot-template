@@ -2,6 +2,7 @@ package telegram
 
 import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	"github.com/resssoft/tgbot-template/internal/models"
 )
 
 const (
@@ -29,10 +30,11 @@ type UserPromise struct {
 }
 
 type Command struct {
-	Name   string
-	Parsed []string
-	Params string
-	Data   tgbotapi.Update
+	Name       string
+	Parsed     []string
+	Params     string
+	Data       tgbotapi.Update
+	IsCallBack bool
 }
 
 type TgFileInfo struct {
@@ -46,8 +48,11 @@ type TgFileInfo struct {
 }
 
 type commandInfo struct {
-	names       []string
+	name        string
+	aliases     []string
 	description string
 	permissions []int64
 	isPublic    bool
+	toMenu      bool
+	event       models.EventName
 }

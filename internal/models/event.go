@@ -18,7 +18,7 @@ var LogFiles = map[string]string{
 
 type EventName string
 
-const NothingEvent EventName = "nothing"
+const NothingEvent EventName = ""
 
 const TelegramSendMessage EventName = "messenger.telegram.message.send"
 const TelegramSendImage EventName = "messenger.telegram.image.send"
@@ -26,6 +26,7 @@ const TelegramSendButtons EventName = "messenger.telegram.buttons.send"
 const TelegramWebHook EventName = "messenger.telegram.webhook"
 const TelegramPromiseCreate EventName = "messenger.telegram.promise.create"
 const TelegramProvideMessage EventName = "messenger.telegram.provide"
+const TelegramCommands EventName = "messenger.telegram.commands"
 
 var TelegramEvents = []EventName{
 	TelegramSendMessage,
@@ -34,10 +35,27 @@ var TelegramEvents = []EventName{
 	TelegramPromiseCreate,
 	TelegramSendImage,
 	TelegramProvideMessage,
+	TelegramCommands,
 }
 
 type TelegramResponse struct {
 	Data []byte
+}
+
+type TelegramCommand struct {
+	Event EventName
+	Name  string
+	Code  string
+}
+
+type TelegramCommandsEvent struct {
+	Commands []TelegramCommand
+}
+
+type TelegramCallBackEvent struct {
+	User      TelegramUser
+	MessageId int64
+	Type      string
 }
 
 const SetLogDebugMode EventName = "log.mode.debug"
@@ -54,6 +72,17 @@ const LogToFile EventName = "fileLogger.log.data"
 
 var FileLoggerEvents = []EventName{
 	LogToFile,
+}
+
+const AnManagerCron EventName = "AnManager.cron"
+const AnManagerMenuAdd EventName = "AnManager.add"
+
+var AnnouncementManagerEvents = []EventName{
+	AnManagerCron,
+	AnManagerMenuAdd,
+}
+
+type AnManagerEvent struct {
 }
 
 type Listener interface {
@@ -73,6 +102,7 @@ type TelegramSendMessageEvent struct {
 	MsgId    string
 	ToFile   bool
 	Buttons  []string
+	Promise  string
 }
 
 type TelegramProvideMessageEvent struct {

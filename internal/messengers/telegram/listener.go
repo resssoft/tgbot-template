@@ -42,28 +42,42 @@ func (u Listener) Listen(_ models.EventName, event interface{}) {
 			chatId = event.ChatId
 		}
 		u.tgApp.SendButtons(chatId, event.Message, event.Buttons)
-	case models.TelegramPromiseCreateEvent:
-		u.tgApp.userPromises[event.User] = UserPromise{
-			userID:      event.User,
-			toKeepOne:   false,
-			promiseType: "",
+		/*
+			case models.TelegramPromiseCreateEvent:
+				u.tgApp.userPromises[event.User] = UserPromise{
+					userID:      event.User,
+					toKeepOne:   false,
+					promiseType: "",
+				}
+		*/
+
+		/*
+			case models.TelegramProvideMessageEvent:
+				chatId := event.ChatId
+				if event.ContactId != "" {
+					//TODO: get by contact
+				}
+				if event.LeadId != "" {
+					//TODO: get by lead
+				}
+				u.tgApp.ErrorHandler(u.tgApp.SendMessage(models.TelegramSendMessageEvent{
+					ChatId:   chatId,
+					Message:  event.Message,
+					ImageURL: event.ImageURL,
+					MsgId:    event.MsgId,
+					ToFile:   event.ToFile,
+					Buttons:  event.Buttons,
+				}))
+		*/
+	case models.TelegramCommandsEvent:
+		for _, command := range event.Commands {
+			commandsInfo[string(command.Event)] = commandInfo{
+				aliases: []string{command.Name},
+				toMenu:  true,
+				name:    command.Name,
+				event:   command.Event,
+			}
 		}
-	case models.TelegramProvideMessageEvent:
-		chatId := event.ChatId
-		if event.ContactId != "" {
-			//TODO: get by contact
-		}
-		if event.LeadId != "" {
-			//TODO: get by lead
-		}
-		u.tgApp.ErrorHandler(u.tgApp.SendMessage(models.TelegramSendMessageEvent{
-			ChatId:   chatId,
-			Message:  event.Message,
-			ImageURL: event.ImageURL,
-			MsgId:    event.MsgId,
-			ToFile:   event.ToFile,
-			Buttons:  event.Buttons,
-		}))
 	default:
 		log.Printf("registered an invalid telegram event: %T\n", event)
 	}

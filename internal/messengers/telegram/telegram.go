@@ -361,8 +361,14 @@ func (t *tgConfig) MessageHandler() {
 					})).Send()
 				}
 			*/
-			msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, update.CallbackQuery.Message.Command())
-			t.Send(msg)
+			//msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, update.CallbackQuery.Message.Command())
+			//t.Send(msg)
+			log.Debug().Msg("tg CallbackQuery")
+
+			t.commands <- Command{
+				IsCallBack: true,
+				Data:       update,
+			}
 		} else {
 			log.Info().Msg("Handle updates")
 			if update.Message == nil {

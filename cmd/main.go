@@ -1,11 +1,13 @@
 package main
 
 import (
+	"github.com/resssoft/tgbot-template/internal/announcementManager"
 	"github.com/resssoft/tgbot-template/internal/database"
 	"github.com/resssoft/tgbot-template/internal/fileLogger"
 	"github.com/resssoft/tgbot-template/internal/mediator"
 	messenger "github.com/resssoft/tgbot-template/internal/messengers"
 	"github.com/resssoft/tgbot-template/internal/models"
+	"github.com/resssoft/tgbot-template/internal/repository"
 	routing "github.com/resssoft/tgbot-template/internal/webServer"
 	"github.com/robfig/cron"
 	"github.com/rs/zerolog"
@@ -65,28 +67,23 @@ func main() {
 	time.Sleep(time.Second)
 	defer loggerClient.CloseAll()
 
-	_, err = database.ProvideMongo(dispatcher) //mongoDbApp
+	mongoDbApp, err := database.ProvideMongo(dispatcher)
 	if err != nil {
 		log.Fatal().Err(err).Send()
 	}
 
-	//userRep := repository.NewUserRepo(mongoDbApp)
-	//leadRep := repository.NewLeadRepo(mongoDbApp)
-	//pipeline.Provide(userRep, leadRep, dispatcher)
+	postRep := repository.NewPostRepo(mongoDbApp)
+	announcementManager.Provide(dispatcher, postRep)
 
 	go messenger.Initialize(dispatcher)
 	go routing.NewRouter(dispatcher)
 
 	log.Info().Msg("Prepare cron jobs")
 	cronJobs := cron.New()
-	// Every 6 hours
-	err = cronJobs.AddFunc("0 0 */6 * * *", func() {
-		log.Debug().Msg("========= START CRON ========= TASK AmoCrmRefreshToken")
-		//log.Info().Err(dispatcher.Dispatch(models.AmoCrmRefreshToken, models.AmoCrmRefreshTokenEvent{})).Send()
-	})
-	err = cronJobs.AddFunc("0 */30 * * * *", func() {
-		log.Debug().Msg("========= START CRON ========= TASK AmoCrmCronSleepersEvent")
-		//log.Info().Err(dispatcher.Dispatch(models.AmoCrmCronSleepers, models.AmoCrmCronSleepersEvent{})).Send()
+	// Every 10 minutes
+	err = cronJobs.AddFunc("0 */2 * * * *", func() {
+		log.Debug().Msg("========= START CRON ========= TASK announcementManager")
+		log.Info().Err(dispatcher.Dispatch(models.AnManagerCron, models.AnManagerEvent{})).Send()
 	})
 	if err != nil {
 		log.Err(err).Msg("cron err")
